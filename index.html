@@ -1,265 +1,143 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <title>Jogo de Coloração de Grafos</title>
-    <style>
-        body {
-            background-color: #11111b;
-            color: #cdd6f4;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-        }
-        h2 {
-            margin: 5px 0 15px 0;
-            font-size: 1.2rem;
-            color: #a6e3a1;
-        }
-        #game-container {
-            border: 2px solid #313244;
-            border-radius: 8px;
-            overflow: hidden;
-            background-color: #1e1e2e;
-        }
-        canvas {
-            display: block;
-            cursor: pointer;
-        }
-        .barra {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 800px;
-            background-color: #11111b;
-            padding: 10px 0;
-        }
-        button {
-            background-color: #313244;
-            color: #cdd6f4;
-            border: none;
-            padding: 8px 14px;
-            border-radius: 4px;
-            font-size: 1rem;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s;
-        }
-        button:hover {
-            background-color: #45475a;
-        }
-        #status {
-            font-size: 1.1rem;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jogo do Grafo</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #11111b;
+      color: #cdd6f4;
+      font-family: "Segoe UI", Arial, sans-serif;
+      text-align: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    h1 { margin: 0 0 4px; }
+    p { margin: 4px 0 14px; color: #a6adc8; }
+    canvas {
+      background: #1e1e2e;
+      border-radius: 12px;
+      max-width: 100%;
+      height: auto;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
+  <h1>🔵🔴 Jogo do Grafo</h1>
+  <p>Leve a bolinha azul até a vermelha. Clique nas bolinhas com borda verde!</p>
+  <canvas id="tela" width="760" height="400"></canvas>
 
-    <div id="game-container">
-        <canvas id="canvas" width="800" height="560"></canvas>
-    </div>
-    <div class="barra" style="width: 800px;">
-        <div>
-            <button onclick="novoJogo()">Novo jogo</button>
-            <button id="btn-dif" onclick="mudarDificuldade()">Dificuldade: Fácil</button>
-        </div>
-        <div id="status">Pinte todos os vértices | Jogadas: 0</div>
-    </div>
+  <script>
+    // VÉRTICES: número = nome, [x, y] = posição na tela
+    const vertices = {
+      1: [100, 200], 2: [260, 80], 3: [260, 320], 4: [420, 200],
+      5: [580, 80], 6: [580, 320], 7: [680, 200],
+    };
 
-<script>
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+    // ARESTAS: linhas que ligam os vértices
+    const arestas = [[1, 2], [1, 3], [2, 4], [3, 4], [4, 5], [4, 6], [5, 7], [6, 7]];
 
-const LARGURA = 800, ALTURA = 560;
-const RAIO = 22;
-const CORES = ["#ffffff", "#ef5350", "#42a5f5", "#66bb6a", "#ffca28"];
-const DIFICULDADES = {"Fácil": 7, "Médio": 11, "Difícil": 16};
+    let pontos = 0;
+    let jogador = 1;
+    let mensagem = "";
 
-let dificuldadeAtual = "Fácil";
-let pontos = [];
-let arestas = [];
-let coresVertices = [];
-let jogadas = 0;
-let venceu = false;
-
-function orientacao(a, b, c) {
-    let v = (b[1] - a[1]) * (c[0] - b[0]) - (b[0] - a[0]) * (c[1] - b[1]);
-    return Math.abs(v) < 1e-9 ? 0 : (v > 0 ? 1 : 2);
-}
-
-function segmentosCruzam(p1, p2, p3, p4) {
-    if ((p1[0] === p3[0] && p1[1] === p3[1]) || (p1[0] === p4[0] && p1[1] === p4[1]) ||
-        (p2[0] === p3[0] && p2[1] === p3[1]) || (p2[0] === p4[0] && p2[1] === p4[1])) {
-        return false;
-    }
-    let o1 = orientacao(p1, p2, p3), o2 = orientacao(p1, p2, p4);
-    let o3 = orientacao(p3, p4, p1), o4 = orientacao(p3, p4, p2);
-    return o1 !== o2 && o3 !== o4;
-}
-
-function dist(p, q) {
-    return Math.hypot(p[0] - q[0], p[1] - q[1]);
-}
-
-function distPontoSegmento(p, a, b) {
-    let ax = a[0], ay = a[1];
-    let bx = b[0], by = b[1];
-    let dx = bx - ax, dy = by - ay;
-    if (dx === 0 && dy === 0) return dist(p, a);
-    let t = Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / (dx * dx + dy * dy)));
-    return dist(p, [ax + t * dx, ay + t * dy]);
-}
-
-function gerarGrafo(n) {
-    let pts = [];
-    let tentativas = 0;
-    while (pts.length < n && tentativas < 5000) {
-        tentativas++;
-        let p = [Math.floor(Math.random() * (LARGURA - 100)) + 50, Math.floor(Math.random() * (ALTURA - 160)) + 50];
-        if (pts.every(q => dist(p, q) > 95)) {
-            pts.push(p);
-        }
+    // devolve os vértices ligados ao vértice v
+    function vizinhos(v) {
+      return arestas.filter(a => a.includes(v)).map(a => (a[0] === v ? a[1] : a[0]));
     }
 
-    let candidatas = [];
-    for (let i = 0; i < pts.length; i++) {
-        for (let j = i + 1; j < pts.length; j++) {
-            candidatas.push([dist(pts[i], pts[j]), i, j]);
-        }
+    // sorteia um destino que NÃO seja o jogador nem um vizinho dele
+    function sortearDestino() {
+      const opcoes = Object.keys(vertices).map(Number)
+        .filter(v => v !== jogador && !vizinhos(jogador).includes(v));
+      return opcoes[Math.floor(Math.random() * opcoes.length)];
     }
-    candidatas.sort((a, b) => a[0] - b[0]);
 
-    let asts = [];
-    let grau = new Array(pts.length).fill(0);
-    for (let item of candidatas) {
-        let [d, i, j] = item;
-        if (d > 230 || grau[i] >= 4 || grau[j] >= 4) continue;
-        let a = pts[i], b = pts[j];
-        if (asts.some(e => segmentosCruzam(a, b, pts[e[0]], pts[e[1]]))) continue;
-        if (pts.some((k_pt, k) => k !== i && k !== j && distPontoSegmento(k_pt, a, b) < RAIO + 8)) continue;
-        
-        asts.push([i, j]);
-        grau[i]++;
-        grau[j]++;
-    }
-    return [pts, asts];
-}
+    let destino = sortearDestino();
 
-function novoJogo() {
-    let res = gerarGrafo(DIFICULDADES[dificuldadeAtual]);
-    pontos = res[0];
-    arestas = res[1];
-    coresVertices = new Array(pontos.length).fill(0);
-    jogadas = 0;
-    venceu = false;
-    desenhar();
-}
+    const tela = document.getElementById("tela");
+    const ctx = tela.getContext("2d");
 
-function mudarDificuldade() {
-    let nomes = Object.keys(DIFICULDADES);
-    let idx = (nomes.indexOf(dificuldadeAtual) + 1) % nomes.length;
-    dificuldadeAtual = nomes[idx];
-    document.getElementById('btn-dif').innerText = `Dificuldade: ${dificuldadeAtual}`;
-    novoJogo();
-}
+    function desenhar() {
+      ctx.clearRect(0, 0, tela.width, tela.height);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
 
-function conflitos() {
-    let ruins = [];
-    for (let [i, j] of arestas) {
-        if (coresVertices[i] !== 0 && coresVertices[i] === coresVertices[j]) {
-            ruins.push([i, j]);
-        }
-    }
-    return ruins;
-}
+      ctx.fillStyle = "white";
+      ctx.font = "bold 20px Segoe UI, Arial";
+      ctx.fillText("Pontos: " + pontos, 380, 25);
 
-function desenhar() {
-    ctx.clearRect(0, 0, LARGURA, ALTURA);
-    let ruins = conflitos();
+      ctx.fillStyle = "#a6e3a1";
+      ctx.font = "14px Segoe UI, Arial";
+      ctx.fillText(mensagem, 380, 380);
 
-    // Desenhar arestas
-    for (let [i, j] of arestas) {
-        let [x1, y1] = pontos[i];
-        let [x2, y2] = pontos[j];
-        let ehRuim = ruins.some(r => (r[0] === i && r[1] === j) || (r[0] === j && r[1] === i));
-        
+      // linhas
+      ctx.strokeStyle = "#585b70";
+      ctx.lineWidth = 4;
+      for (const [a, b] of arestas) {
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.strokeStyle = ehRuim ? "#ff1744" : "#9399b2";
-        ctx.lineWidth = ehRuim ? 5 : 3;
+        ctx.moveTo(...vertices[a]);
+        ctx.lineTo(...vertices[b]);
         ctx.stroke();
-    }
+      }
 
-    // Desenhar vértices
-    for (let i = 0; i < pontos.length; i++) {
-        let [x, y] = pontos[i];
+      // bolinhas
+      for (const num in vertices) {
+        const n = Number(num);
+        const [x, y] = vertices[n];
+        let cor = "#cdd6f4", borda = "#45475a", largura = 3;
+        if (n === destino) cor = "#f38ba8";               // vermelho
+        if (n === jogador) cor = "#89b4fa";               // azul
+        if (vizinhos(jogador).includes(n)) {              // borda verde = pode ir
+          borda = "#a6e3a1";
+          largura = 5;
+        }
         ctx.beginPath();
-        ctx.arc(x, y, RAIO, 0, 2 * Math.PI);
-        ctx.fillStyle = CORES[coresVertices[i]];
+        ctx.arc(x, y, 28, 0, Math.PI * 2);
+        ctx.fillStyle = cor;
         ctx.fill();
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "#cdd6f4";
+        ctx.strokeStyle = borda;
+        ctx.lineWidth = largura;
         ctx.stroke();
 
         ctx.fillStyle = "#1e1e2e";
-        ctx.font = "bold 13px 'Segoe UI'";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(i + 1, x, y);
+        ctx.font = "bold 18px Segoe UI, Arial";
+        ctx.fillText(n, x, y);
+      }
     }
 
-    // Status e Vitória
-    let todosPintados = coresVertices.every(k => k !== 0);
-    let statusText = "";
-    
-    if (todosPintados && ruins.length === 0) {
-        venceu = true;
-        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.fillRect(0, ALTURA / 2 - 45, LARGURA, 90);
-        
-        ctx.fillStyle = "#a6e3a1";
-        ctx.font = "bold 26px 'Segoe UI'";
-        ctx.textAlign = "center";
-        ctx.fillText(`🎉 Você venceu em ${jogadas} jogadas!`, LARGURA / 2, ALTURA / 2);
-        statusText = "Vitória!";
-    } else if (ruins.length > 0) {
-        statusText = `${ruins.length} conflito(s) em vermelho`;
-    } else {
-        statusText = "Pinte todos os vértices";
-    }
+    // roda quando o jogador clica na tela
+    tela.addEventListener("click", (evento) => {
+      const caixa = tela.getBoundingClientRect();
+      const escala = tela.width / caixa.width;      // ajusta se a tela estiver redimensionada
+      const cx = (evento.clientX - caixa.left) * escala;
+      const cy = (evento.clientY - caixa.top) * escala;
 
-    document.getElementById('status').innerText = `${statusText}   |   Jogadas: ${jogadas}`;
-}
-
-canvas.addEventListener('mousedown', (e) => {
-    if (venceu) return;
-    const rect = canvas.getBoundingClientRect();
-    let x = e.clientX - rect.left;
-    let y = e.clientY - rect.top;
-
-    let passo = (e.button === 2) ? -1 : 1; // Botão direito = -1, esquerdo = +1
-
-    for (let i = 0; i < pontos.length; i++) {
-        if (dist([x, y], pontos[i]) <= RAIO) {
-            coresVertices[i] = (coresVertices[i] + passo + CORES.length) % CORES.length;
-            jogadas++;
-            desenhar();
-            break;
+      for (const n of vizinhos(jogador)) {
+        const [x, y] = vertices[n];
+        if (Math.hypot(cx - x, cy - y) < 28) {
+          jogador = n;
+          mensagem = "";
+          if (jogador === destino) {
+            pontos++;
+            destino = sortearDestino();
+            mensagem = "Acertou! A vermelha mudou de lugar!";
+          }
+          desenhar();
+          return;
         }
-    }
-});
+      }
+    });
 
-// Evitar menu de contexto ao clicar com botão direito no canvas
-canvas.addEventListener('contextmenu', e => e.preventDefault());
-
-// Iniciar o jogo ao carregar a página
-novoJogo();
-</script>
-
+    desenhar();
+  </script>
 </body>
 </html>
